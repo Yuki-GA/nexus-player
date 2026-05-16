@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Nexus Flash Player</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
+        #ruffle-container {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="ruffle-container"></div>
+
+    <script>
+        window.RufflePlayer = window.RufflePlayer || {};
+        window.RufflePlayer.config = {
+            autoplay: "on",
+            letterbox: "on",
+            unmuteOverlay: "hidden",
+            wmode: "direct",
+            warnOnUnsupportedContent: false
+        };
+    </script>
+
+    <!-- This script will be served from the app's internal assets -->
+    <script src="ruffle.js"></script>
+
+    <script>
+        window.addEventListener("DOMContentLoaded", () => {
+            const ruffle = window.RufflePlayer.newest();
+            const player = ruffle.createPlayer();
+            const container = document.getElementById("ruffle-container");
+            container.appendChild(player);
+            player.tabIndex = 0;
+
+            const params = new URLSearchParams(window.location.search);
+            const swfPath = params.get("swf") || "";
+            const swfUrl = swfPath.startsWith("/")
+                ? `${window.location.origin}${swfPath}`
+                : swfPath;
+
+            if (!swfUrl) {
+                container.textContent = "No SWF file was found in this folder.";
+                container.style.color = "#fff";
+                container.style.display = "grid";
+                container.style.placeItems = "center";
+                return;
+            }
+
+            player.load({
+                url: swfUrl,
+                backgroundColor: "#000000",
+                letterbox: "on",
+                unmuteOverlay: "hidden"
+            });
+            
+            // Scaled to fit mobile screen
+            player.style.width = "100%";
+            player.style.height = "100%";
+            player.focus();
+        });
+    </script>
+</body>
+</html>
