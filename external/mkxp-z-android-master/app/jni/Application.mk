@@ -3,3 +3,4 @@ APP_PLATFORM := android-21
 APP_OPTIM := debug
 APP_STL := c++_shared
 APP_CPPFLAGS := -std=c++14 -frtti -fexceptions
+APP_LDFLAGS := -Wl,-z,max-page-size=16384

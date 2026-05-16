@@ -2,15 +2,7 @@ package com.zen.myapplication.nexus.ui.player
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -23,77 +15,56 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.zen.myapplication.nexus.core.input.ActionKey
-import com.zen.myapplication.nexus.core.input.DPadDirection
+import com.zen.myapplication.nexus.core.input.NexusInputIntent
 
 /**
- * A customizable virtual controller overlay for the game runtime.
+ * VirtualControllerOverlay: A passive visual layer for touch controls.
+ * Dispatches abstract NexusInputIntents to the authoritative pipeline.
  */
 @Composable
 fun VirtualControllerOverlay(
     opacity: Float = 0.6f,
-    sizeScale: Float = 1.0f,
-    onDPadInput: (DPadDirection, Boolean) -> Unit,
-    onActionInput: (ActionKey, Boolean) -> Unit
+    onInput: (NexusInputIntent, Boolean) -> Unit
 ) {
-    val buttonSize = 56.dp * sizeScale.coerceIn(0.75f, 1.35f)
-    val edgePadding = 24.dp * sizeScale.coerceIn(0.85f, 1.2f)
+    val buttonSize = 64.dp
+    val padding = 24.dp
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // D-Pad Area
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(edgePadding)
-                .alpha(opacity.coerceIn(0.2f, 1.0f))
+                .padding(padding)
+                .alpha(opacity)
         ) {
-            DPad(buttonSize = buttonSize, onDPadInput = onDPadInput)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                ControllerButton("UP", buttonSize) { onInput(NexusInputIntent.DPAD_UP, it) }
+                Row {
+                    ControllerButton("LEFT", buttonSize) { onInput(NexusInputIntent.DPAD_LEFT, it) }
+                    Spacer(modifier = Modifier.width(buttonSize))
+                    ControllerButton("RIGHT", buttonSize) { onInput(NexusInputIntent.DPAD_RIGHT, it) }
+                }
+                ControllerButton("DOWN", buttonSize) { onInput(NexusInputIntent.DPAD_DOWN, it) }
+            }
         }
 
+        // Action Buttons Area
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(edgePadding)
-                .alpha(opacity.coerceIn(0.2f, 1.0f))
+                .padding(padding)
+                .alpha(opacity)
         ) {
-            ActionButtons(buttonSize = buttonSize, onActionInput = onActionInput)
-        }
-    }
-}
-
-@Composable
-fun DPad(
-    buttonSize: Dp,
-    onDPadInput: (DPadDirection, Boolean) -> Unit
-) {
-    val gap = buttonSize
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        ControllerButton(label = "UP", size = buttonSize) { onDPadInput(DPadDirection.UP, it) }
-        Row {
-            ControllerButton(label = "L", size = buttonSize) { onDPadInput(DPadDirection.LEFT, it) }
-            Spacer(modifier = Modifier.width(gap))
-            ControllerButton(label = "R", size = buttonSize) { onDPadInput(DPadDirection.RIGHT, it) }
-        }
-        ControllerButton(label = "DN", size = buttonSize) { onDPadInput(DPadDirection.DOWN, it) }
-    }
-}
-
-@Composable
-fun ActionButtons(
-    buttonSize: Dp,
-    onActionInput: (ActionKey, Boolean) -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ControllerButton(label = "SH", size = buttonSize) { onActionInput(ActionKey.SHIFT, it) }
-            ControllerButton(label = "ESC", size = buttonSize) { onActionInput(ActionKey.ESC, it) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ControllerButton(label = "Z", size = buttonSize) { onActionInput(ActionKey.Z, it) }
-            ControllerButton(label = "X", size = buttonSize) { onActionInput(ActionKey.X, it) }
-            ControllerButton(label = "OK", size = buttonSize) { onActionInput(ActionKey.ENTER, it) }
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ControllerButton("SHIFT", buttonSize) { onInput(NexusInputIntent.ACTION_WEST, it) }
+                    ControllerButton("ESC", buttonSize) { onInput(NexusInputIntent.ACTION_NORTH, it) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ControllerButton("Z", buttonSize) { onInput(NexusInputIntent.ACTION_SOUTH, it) }
+                    ControllerButton("X", buttonSize) { onInput(NexusInputIntent.ACTION_EAST, it) }
+                }
+            }
         }
     }
 }
@@ -109,7 +80,7 @@ private fun ControllerButton(
             .size(size)
             .border(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                 shape = CircleShape
             )
             .pointerInput(label) {
@@ -125,16 +96,11 @@ private fun ControllerButton(
                 )
             },
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        shadowElevation = 6.dp
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+        contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
-            )
+            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
         }
     }
 }

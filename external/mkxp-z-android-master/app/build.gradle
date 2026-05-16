@@ -42,11 +42,19 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
     externalNativeBuild {
         ndkBuild {
             path "jni/Android.mk"
         }
     }
+
+    ndkVersion = "28.2.13676358"
 }
 
 dependencies {

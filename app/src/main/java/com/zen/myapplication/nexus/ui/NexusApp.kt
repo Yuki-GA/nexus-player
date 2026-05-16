@@ -30,25 +30,29 @@ import androidx.navigation.compose.rememberNavController
 import com.zen.myapplication.nexus.core.storage.GameEntry
 import com.zen.myapplication.nexus.core.storage.GameLibraryManager
 import com.zen.myapplication.nexus.core.storage.SafManager
-import com.zen.myapplication.nexus.core.storage.canUseNativeRuntime
-import com.zen.myapplication.nexus.core.storage.canUseWebRuntime
+import com.zen.myapplication.nexus.core.storage.canUseHtml5Runtime
 import com.zen.myapplication.nexus.core.storage.displayName
 import com.zen.myapplication.nexus.core.storage.requiresNativeRuntime
-import com.zen.myapplication.nexus.ui.player.Html5RuntimeScreen
-import com.zen.myapplication.nexus.ui.player.NativeRuntimeScreen
+import com.zen.myapplication.nexus.runtime.OverlayHost
+import com.zen.myapplication.nexus.runtime.RuntimeController
+import androidx.lifecycle.viewmodel.compose.viewModel
+
 import com.zen.myapplication.nexus.ui.settings.SettingsScreen
 import kotlinx.coroutines.launch
 import java.nio.charset.StandardCharsets
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NexusApp() {
+fun NexusApp(runtimeController: RuntimeController) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val safManager = remember { SafManager(context) }
     val gameLibraryManager = remember { GameLibraryManager(context) }
     val games by gameLibraryManager.games.collectAsState(initial = emptyList())
+
+    // No longer using local viewModel() to ensure we use the Activity-scoped one
+    // Passed in via parameter
 
     // Launcher for selecting a game directory via SAF
     val dirPickerLauncher = rememberLauncherForActivityResult(
@@ -98,7 +102,16 @@ fun NexusApp() {
                 GameLibraryScreen(
                     games = games,
                     onGameClick = { game ->
-                        navController.navigate(playerRoute(Uri.parse(game.uri), game.engine))
+                        val gameUri = Uri.parse(game.uri)
+                        if (safManager.isUriPermissionValid(gameUri)) {
+                            navController.navigate(playerRoute(gameUri, game.engine))
+                        } else {
+                            scope.launch {
+                                // Provide feedback to user that the folder is missing
+                                // In a real app we'd use a Snackbar or Dialog
+                                android.util.Log.e("NexusApp", "Game folder is no longer accessible: $gameUri")
+                            }
+                        }
                     },
                     onRemoveGame = { game ->
                         scope.launch { gameLibraryManager.removeGame(game.uri) }
@@ -118,11 +131,12 @@ fun NexusApp() {
                 }
                 
                 when {
-                    engineType.canUseWebRuntime -> {
-                        Html5RuntimeScreen(gameFolderUri = gameUri, engineType = engineType)
-                    }
-                    engineType.canUseNativeRuntime -> {
-                        NativeRuntimeScreen(gameFolderUri = gameUri, engineType = engineType)
+                    engineType.canUseHtml5Runtime || engineType.requiresNativeRuntime -> {
+                        OverlayHost(
+                            rootUri = gameUri,
+                            engineType = engineType,
+                            runtimeController = runtimeController
+                        )
                     }
                     else -> {
                         RuntimeUnavailableScreen(
@@ -131,6 +145,7 @@ fun NexusApp() {
                         )
                     }
                 }
+
             }
             composable("settings") {
                 SettingsScreen()
@@ -281,7 +296,7 @@ fun GameLibraryScreen(
 @Composable
 private fun EngineBadge(engine: SafManager.GameEngine) {
     val color = when {
-        engine.canUseWebRuntime -> MaterialTheme.colorScheme.primary
+        engine.canUseHtml5Runtime -> MaterialTheme.colorScheme.primary
         engine.requiresNativeRuntime -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.outline
     }
@@ -293,7 +308,7 @@ private fun EngineBadge(engine: SafManager.GameEngine) {
     ) {
         Text(
             text = when {
-                engine.canUseWebRuntime -> "Ready"
+                engine.canUseHtml5Runtime -> "Ready"
                 engine.requiresNativeRuntime -> "Native pending"
                 else -> "Unsupported"
             },

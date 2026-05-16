@@ -20,6 +20,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        externalNativeBuild {
+            cmake {
+                arguments("-DANDROID_STL=c++_shared", "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384")
+            }
+        }
     }
 
     buildTypes {
@@ -37,6 +43,13 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+    
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
     
     externalNativeBuild {
@@ -46,7 +59,7 @@ android {
         }
     }
     
-    ndkVersion = "26.1.10909125"
+    ndkVersion = "28.2.13676358"
 }
 
 dependencies {
@@ -59,12 +72,15 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     
+    // 16KB Compatibility Hardening
+    implementation(libs.androidx.graphics.path)
+    implementation(libs.androidx.datastore.preferences)
+    
     // Nexus Runtime Additions
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
     
     // Room VFS
     implementation(libs.androidx.room.runtime)

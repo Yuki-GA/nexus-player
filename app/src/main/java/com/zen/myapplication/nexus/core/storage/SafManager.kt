@@ -37,7 +37,28 @@ class SafManager(private val context: Context) {
     fun takePersistableUriPermission(uri: Uri) {
         val takeFlags: Int = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
                 android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+        
+        try {
+            context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+        } catch (e: Exception) {
+            // Android 15+ might throw SecurityException if the URI is no longer valid or permission denied
+            android.util.Log.e("SafManager", "Failed to take persistable URI permission for: $uri", e)
+        }
+    }
+
+    /**
+     * Validates if the given URI still has active persistable permissions.
+     * Essential for Android 15+ stability across reboots and app updates.
+     */
+    fun isUriPermissionValid(uri: Uri): Boolean {
+        return context.contentResolver.persistedUriPermissions.any { 
+            it.uri == uri && it.isReadPermission
+        } && try {
+            // Further verification: Check if we can actually reach the directory
+            DocumentFile.fromTreeUri(context, uri)?.exists() == true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**

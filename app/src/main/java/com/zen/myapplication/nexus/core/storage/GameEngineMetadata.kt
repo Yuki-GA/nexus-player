@@ -1,6 +1,6 @@
 package com.zen.myapplication.nexus.core.storage
 
-val SafManager.GameEngine.canUseWebRuntime: Boolean
+val SafManager.GameEngine.canUseHtml5Runtime: Boolean
     get() = when (this) {
         SafManager.GameEngine.RPG_MAKER_MV,
         SafManager.GameEngine.RPG_MAKER_MZ,
@@ -19,7 +19,7 @@ val SafManager.GameEngine.canUseWebRuntime: Boolean
     }
 
 val SafManager.GameEngine.canUseNativeRuntime: Boolean
-    get() = false
+    get() = this.requiresNativeRuntime
 
 val SafManager.GameEngine.requiresNativeRuntime: Boolean
     get() = when (this) {

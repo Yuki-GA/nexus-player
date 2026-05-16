@@ -1,38 +1,28 @@
 package com.zen.myapplication.nexus.ui.settings
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.zen.myapplication.nexus.core.settings.SettingsManager
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+/**
+ * SettingsScreen: Handheld-optimized settings interface.
+ * High-density card-based design with Android 15+ WindowInsets support.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
@@ -43,28 +33,33 @@ fun SettingsScreen() {
     val opacity by settingsManager.controllerOpacity.collectAsState(initial = 0.6f)
     val controllerSize by settingsManager.controllerSize.collectAsState(initial = 1.0f)
     val showFps by settingsManager.showFps.collectAsState(initial = false)
-    val translationEnabled by settingsManager.translationEnabled.collectAsState(initial = true)
     val hardwareAccel by settingsManager.forceHardwareAccel.collectAsState(initial = true)
     val fpsLimit by settingsManager.fpsLimit.collectAsState(initial = 60)
-    val targetLang by settingsManager.targetLanguage.collectAsState(initial = "English")
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing) // Android 15+ Notch/Gesture safety
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Engine Settings", style = MaterialTheme.typography.headlineSmall)
+        // Header
+        Column(modifier = Modifier.padding(bottom = 8.dp)) {
             Text(
-                "Tune runtime behavior for imported games.",
+                text = "Runtime Settings",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Optimize your handheld experience.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        SettingsSection(title = "Virtual Controller") {
+        // Section: Interface & Overlays
+        SettingsCard(title = "Interface & Overlays", icon = Icons.Default.Layers) {
             SettingsSlider(
                 label = "Overlay Opacity",
                 value = opacity,
@@ -79,21 +74,22 @@ fun SettingsScreen() {
                 valueRange = 0.75f..1.35f,
                 onValueChange = { scope.launch { settingsManager.setControllerSize(it) } }
             )
-        }
-
-        SettingsSection(title = "Compatibility & Performance") {
             SettingsToggle(
-                label = "Force Hardware Acceleration",
-                checked = hardwareAccel,
-                onCheckedChange = { scope.launch { settingsManager.setForceHardwareAccel(it) } }
-            )
-            SettingsToggle(
-                label = "Show FPS Overlay",
+                label = "Show Performance Overlay",
                 checked = showFps,
                 onCheckedChange = { scope.launch { settingsManager.setShowFps(it) } }
             )
+        }
+
+        // Section: Engine & Performance
+        SettingsCard(title = "Engine & Performance", icon = Icons.Default.Speed) {
+            SettingsToggle(
+                label = "Hardware Acceleration",
+                checked = hardwareAccel,
+                onCheckedChange = { scope.launch { settingsManager.setForceHardwareAccel(it) } }
+            )
             SettingsSlider(
-                label = "RPG Maker FPS Limit",
+                label = "FPS Target",
                 value = fpsLimit.toFloat(),
                 valueText = "$fpsLimit FPS",
                 valueRange = 30f..120f,
@@ -107,55 +103,69 @@ fun SettingsScreen() {
                     scope.launch { settingsManager.setFpsLimit(snapped) }
                 }
             )
+        }
+
+        // Placeholder for future engine-specific settings (UX Completeness)
+        SettingsCard(title = "Engine Compatibility", icon = Icons.Default.Extension) {
             Text(
-                "Use 60 FPS for most MV/MZ games. Drop to 30 FPS on older phones or raise to 120 only for light games.",
+                "Advanced compatibility shims for MV/MZ plugins and NW.js behavior are managed automatically per-game.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp)
             )
         }
 
-        SettingsSection(title = "AI Translation Hub") {
-            SettingsToggle(
-                label = "Enable Real-Time Translation",
-                checked = translationEnabled,
-                onCheckedChange = { scope.launch { settingsManager.setTranslationEnabled(it) } }
-            )
-
-            OutlinedTextField(
-                value = targetLang,
-                onValueChange = { scope.launch { settingsManager.setTargetLanguage(it) } },
-                label = { Text("Target Language") },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
 @Composable
-fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary
+private fun SettingsCard(
+    title: String,
+    icon: ImageVector,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        content()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            content()
+        }
     }
 }
 
 @Composable
-fun SettingsToggle(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun SettingsToggle(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .padding(vertical = 8.dp)
     ) {
         Text(
-            label,
+            text = label,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyLarge
         )
@@ -164,7 +174,7 @@ fun SettingsToggle(label: String, checked: Boolean, onCheckedChange: (Boolean) -
 }
 
 @Composable
-fun SettingsSlider(
+private fun SettingsSlider(
     label: String,
     value: Float,
     valueText: String,
@@ -172,7 +182,7 @@ fun SettingsSlider(
     steps: Int = 0,
     onValueChange: (Float) -> Unit
 ) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -187,7 +197,7 @@ fun SettingsSlider(
                 Text(
                     text = valueText,
                     style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
         }
@@ -195,7 +205,8 @@ fun SettingsSlider(
             value = value,
             valueRange = valueRange,
             steps = steps,
-            onValueChange = onValueChange
+            onValueChange = onValueChange,
+            modifier = Modifier.padding(top = 4.dp)
         )
     }
 }

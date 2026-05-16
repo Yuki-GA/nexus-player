@@ -23,3 +23,9 @@ target_link_libraries(
         android
         EGL
         GLESv2)
+
+# Enforce 16KB ELF alignment for Android 15 compatibility
+target_link_options(
+        nexus-engine
+        PRIVATE
+        "-Wl,-z,max-page-size=16384")
