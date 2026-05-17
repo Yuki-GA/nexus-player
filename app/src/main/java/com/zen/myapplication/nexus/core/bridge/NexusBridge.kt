@@ -10,7 +10,7 @@ import android.net.Uri
 
 /**
  * NexusBridge: The production-grade JS-Native bridge.
- * Mocks a full NW.js environment to support advanced MV/MZ plugins.
+ * Mocks are now handled by the early-boot VFS bootstrapper.
  */
 class NexusBridge(
     private val webView: WebView,
@@ -27,67 +27,11 @@ class NexusBridge(
         webView.addJavascriptInterface(this, INTERFACE_NAME)
     }
 
+    /**
+     * DISCONTINUED: Polyfills are now injected early via NexusVFS bootstrapper.
+     */
     fun injectPolyfills() {
-        val script = """
-            (function() {
-                if (window.__NexusInjected) return;
-                window.__NexusInjected = true;
-
-                window.nw = {
-                    Window: { get: () => ({ 
-                        show: () => {}, close: () => ${INTERFACE_NAME}.exitGame(),
-                        isFullscreen: true, enterFullscreen: () => {}, 
-                        leaveFullscreen: () => {}, focus: () => {} 
-                    }) },
-                    App: { quit: () => ${INTERFACE_NAME}.exitGame(), argv: [], dataPath: 'nexus://save' }
-                };
-
-                window.process = { platform: 'win32', env: { NODE_ENV: 'production' }, mainModule: { filename: 'index.html' } };
-                
-                window.require = function(mod) {
-                    if (mod === 'fs') return {
-                        readFileSync: (path) => ${INTERFACE_NAME}.readSaveSync(path),
-                        writeFileSync: (path, data) => ${INTERFACE_NAME}.writeSaveSync(path, data),
-                        existsSync: (path) => ${INTERFACE_NAME}.existsSaveSync(path),
-                        mkdirSync: () => true,
-                        readdirSync: () => [],
-                        statSync: () => ({ isDirectory: () => false, isFile: () => true })
-                    };
-                    if (mod === 'path') return {
-                        join: (...args) => args.join('/').replace(/\/+/g, '/'),
-                        sep: '/'
-                    };
-                    return {};
-                };
-
-                if (window.SceneManager) {
-                    SceneManager.catchException = (e) => {
-                        console.error(e);
-                        ${INTERFACE_NAME}.reportCrash(e.message);
-                    };
-                }
-
-                // 4. Nexus Engine Controls
-                window.__nexus.engine = {
-                    toggleFps: () => {
-                        // RPG Maker F2 simulation
-                        const event = new KeyboardEvent('keydown', { keyCode: 113, key: 'F2' });
-                        window.dispatchEvent(event);
-                    },
-                    setScale: (scale) => {
-                        document.body.style.zoom = scale;
-                        window.dispatchEvent(new Event('resize'));
-                    },
-                    screenshot: () => {
-                        const canvas = document.getElementById('upperCanvas') || document.getElementsByTagName('canvas')[0];
-                        return canvas ? canvas.toDataURL('image/png') : null;
-                    }
-                };
-                
-                console.log("[Nexus] Engine Polyfills Active");
-            })();
-        """.trimIndent()
-        webView.evaluateJavascript(script, null)
+        Log.d(TAG, "injectPolyfills() called - skipping redundant injection")
     }
 
     @JavascriptInterface
@@ -110,30 +54,29 @@ class NexusBridge(
     @JavascriptInterface
     fun toggleFpsDisplay() {
         webView.post {
-            webView.evaluateJavascript("if(window.__nexus.engine) window.__nexus.engine.toggleFps();", null)
+            webView.evaluateJavascript("if(window.__nexus && window.__nexus.engine) window.__nexus.engine.toggleFps();", null)
         }
     }
 
     @JavascriptInterface
     fun setResolutionScale(scale: Float) {
         webView.post {
-            webView.evaluateJavascript("if(window.__nexus.engine) window.__nexus.engine.setScale($scale);", null)
+            webView.evaluateJavascript("if(window.__nexus && window.__nexus.engine) window.__nexus.engine.setScale($scale);", null)
         }
     }
 
     @JavascriptInterface
     fun captureScreenshot() {
         webView.post {
-            webView.evaluateJavascript("if(window.__nexus.engine) window.__nexus.engine.screenshot();") { result ->
-                // In a real app we'd save the base64 string to storage
+            webView.evaluateJavascript("if(window.__nexus && window.__nexus.engine) window.__nexus.engine.screenshot();") { result ->
                 Log.d(TAG, "Screenshot captured (length: ${result?.length})")
             }
         }
     }
 
     @JavascriptInterface
-    fun readSaveSync(path: String): String? {
-        return runBlocking { vfs.readAssetAsString(gameId, path, vfsCache) }
+    fun readSaveSync(path: String): String? = runBlocking { 
+        vfs.readAssetAsString(gameId, path, vfsCache) 
     }
 
     @JavascriptInterface
@@ -142,8 +85,8 @@ class NexusBridge(
     }
 
     @JavascriptInterface
-    fun existsSaveSync(path: String): Boolean {
-        return runBlocking { vfs.assetExists(gameId, path, vfsCache) }
+    fun existsSaveSync(path: String): Boolean = runBlocking { 
+        vfs.assetExists(gameId, path, vfsCache) 
     }
 
     @JavascriptInterface
@@ -158,17 +101,17 @@ class NexusBridge(
 
     @JavascriptInterface
     fun getTranslationStatus(): String {
-        return "" // In a real app we'd fetch this from window.__nexus.translation
+        return ""
     }
 
     @JavascriptInterface
     fun reloadTranslation() {
-        webView.post { webView.evaluateJavascript("if(window.__nexus.translation) window.__nexus.translation.reload();", null) }
+        webView.post { webView.evaluateJavascript("if(window.__nexus && window.__nexus.translation) window.__nexus.translation.reload();", null) }
     }
 
     @JavascriptInterface
     fun setTranslationEnabled(enabled: Boolean) {
-        webView.post { webView.evaluateJavascript("if(window.__nexus.translation) window.__nexus.translation.setEnabled($enabled);", null) }
+        webView.post { webView.evaluateJavascript("if(window.__nexus && window.__nexus.translation) window.__nexus.translation.setEnabled($enabled);", null) }
     }
 
     @JavascriptInterface

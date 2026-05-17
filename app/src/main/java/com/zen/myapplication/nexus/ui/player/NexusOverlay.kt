@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,30 +17,35 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zen.myapplication.nexus.core.input.NexusInput
 import com.zen.myapplication.nexus.runtime.RuntimeController
 import com.zen.myapplication.nexus.runtime.RuntimeState
 import kotlinx.coroutines.delay
 import kotlin.math.*
 
 /**
- * NexusOverlay: Immersive gaming controls inspired by Ludens.
+ * NexusOverlay: Professional PC Keyboard Emulation for RPG Maker.
+ * Optimized for touchscreens. Surivives rotation and recomposition.
  */
 @Composable
 fun NexusOverlay(
     runtimeController: RuntimeController,
     opacity: Float = 0.6f,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onExit: () -> Unit
 ) {
     val state by runtimeController.state.collectAsState()
     var isVisible by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
+    // Auto-hide utility
     LaunchedEffect(lastInteraction) {
         delay(3000)
         if (System.currentTimeMillis() - lastInteraction >= 3000) {
@@ -68,56 +75,30 @@ fun NexusOverlay(
         AnimatedVisibility(
             visible = isVisible && state is RuntimeState.Running,
             enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize()
+            exit = fadeOut()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
+                
+                // --- TOP UTILITY BAR ---
                 QuickActionsBar(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 16.dp),
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp),
                     onSettings = onOpenSettings,
-                    onScreenshot = { runtimeController.webViewInstance?.let { /* Capture */ } },
-                    onToggleFps = { runtimeController.webViewInstance?.post { runtimeController.webViewInstance?.evaluateJavascript("if(window.__nexus.engine) window.__nexus.engine.toggleFps();", null) } }
+                    onExit = onExit
                 )
 
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 32.dp, bottom = 32.dp)
-                ) {
-                    VirtualJoystick(
+                // --- LEFT: DIGITAL D-PAD (PC Arrow Keys) ---
+                Box(modifier = Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 48.dp)) {
+                    DigitalDPad(
                         opacity = opacity,
-                        onDirectionChange = { keyCode, isPressed ->
-                            if (keyCode != null) {
-                                val type = if (isPressed) "keydown" else "keyup"
-                                runtimeController.webViewInstance?.post {
-                                    runtimeController.webViewInstance?.evaluateJavascript(
-                                        "(function(){ window.dispatchEvent(new KeyboardEvent('$type', {keyCode: $keyCode, which: $keyCode})); })();",
-                                        null
-                                    )
-                                }
-                            }
-                        }
+                        onKeyAction = { key, pressed -> runtimeController.input?.dispatchKey(key, pressed) }
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 32.dp, bottom = 32.dp)
-                ) {
-                    ActionButtons(
+                // --- RIGHT: KEYBOARD CLUSTER (Z, X, SHIFT) ---
+                Box(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 48.dp)) {
+                    ActionCluster(
                         opacity = opacity,
-                        onButtonAction = { keyCode, isPressed ->
-                            val type = if (isPressed) "keydown" else "keyup"
-                            runtimeController.webViewInstance?.post {
-                                runtimeController.webViewInstance?.evaluateJavascript(
-                                    "(function(){ window.dispatchEvent(new KeyboardEvent('$type', {keyCode: $keyCode, which: $keyCode})); })();",
-                                    null
-                                )
-                            }
-                        }
+                        onKeyAction = { key, pressed -> runtimeController.input?.dispatchKey(key, pressed) }
                     )
                 }
             }
@@ -126,149 +107,166 @@ fun NexusOverlay(
 }
 
 @Composable
-fun QuickActionsBar(
-    modifier: Modifier = Modifier,
-    onSettings: () -> Unit,
-    onScreenshot: () -> Unit,
-    onToggleFps: () -> Unit
-) {
-    Surface(
-        modifier = modifier,
-        shape = CircleShape,
-        color = Color.Black.copy(alpha = 0.6f),
-        tonalElevation = 4.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onToggleFps) { Icon(Icons.Default.Speed, "FPS", tint = Color.White) }
-            IconButton(onClick = onScreenshot) { Icon(Icons.Default.Screenshot, "Capture", tint = Color.White) }
-            IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Settings", tint = Color.White) }
-        }
-    }
-}
-
-@Composable
-fun VirtualJoystick(
+private fun DigitalDPad(
     opacity: Float,
-    onDirectionChange: (Int?, Boolean) -> Unit
+    onKeyAction: (Int, Boolean) -> Unit
 ) {
-    val size = 160.dp
-    val thumbSize = 60.dp
+    val size = 180.dp
     val density = LocalDensity.current
-    val radiusPx = with(density) { (size / 2).toPx() }
+    val sizePx = with(density) { size.toPx() }
     
-    var thumbOffset by remember { mutableStateOf(Offset.Zero) }
-    var activeKeyCode by remember { mutableStateOf<Int?>(null) }
+    // State to track current directions to avoid spam
+    val pressedDirections = remember { mutableSetOf<Int>() }
 
     Box(
         modifier = Modifier
             .size(size)
             .alpha(opacity)
-            .clip(CircleShape)
-            .background(Color.DarkGray.copy(alpha = 0.5f))
             .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragEnd = {
-                        if (activeKeyCode != null) onDirectionChange(activeKeyCode, false)
-                        activeKeyCode = null
-                        thumbOffset = Offset.Zero
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        val newOffset = thumbOffset + dragAmount
-                        val distance = sqrt(newOffset.x.pow(2) + newOffset.y.pow(2))
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pointer = event.changes.firstOrNull { it.pressed }
                         
-                        if (distance <= radiusPx) {
-                            thumbOffset = newOffset
-                        } else {
-                            val ratio = radiusPx / distance
-                            thumbOffset = Offset(newOffset.x * ratio, newOffset.y * ratio)
+                        val newKeys = mutableSetOf<Int>()
+                        if (pointer != null) {
+                            val pos = pointer.position
+                            val cx = sizePx / 2
+                            val cy = sizePx / 2
+                            val dx = pos.x - cx
+                            val dy = pos.y - cy
+                            
+                            val dist = sqrt(dx*dx + dy*dy)
+                            if (dist > 20) { // Deadzone
+                                val angle = atan2(dy, dx) * 180 / PI
+                                
+                                // 8-Direction Digital Mapping
+                                if (angle in -112.5..-67.5) { newKeys.add(NexusInput.KEY_UP) }
+                                else if (angle in 67.5..112.5) { newKeys.add(NexusInput.KEY_DOWN) }
+                                else if (angle in -22.5..22.5) { newKeys.add(NexusInput.KEY_RIGHT) }
+                                else if (angle in 157.5..180.0 || angle in -180.0..-157.5) { newKeys.add(NexusInput.KEY_LEFT) }
+                                // Diagonals
+                                else if (angle in -67.5..-22.5) { newKeys.add(NexusInput.KEY_UP); newKeys.add(NexusInput.KEY_RIGHT) }
+                                else if (angle in -157.5..-112.5) { newKeys.add(NexusInput.KEY_UP); newKeys.add(NexusInput.KEY_LEFT) }
+                                else if (angle in 22.5..67.5) { newKeys.add(NexusInput.KEY_DOWN); newKeys.add(NexusInput.KEY_RIGHT) }
+                                else if (angle in 112.5..157.5) { newKeys.add(NexusInput.KEY_DOWN); newKeys.add(NexusInput.KEY_LEFT) }
+                            }
                         }
 
-                        val nx = thumbOffset.x / radiusPx
-                        val ny = thumbOffset.y / radiusPx
+                        // Diff and dispatch
+                        val released = pressedDirections - newKeys
+                        val pressed = newKeys - pressedDirections
                         
-                        val newDir = when {
-                            abs(nx) < 0.3 && abs(ny) < 0.3 -> null
-                            abs(nx) > abs(ny) -> if (nx > 0) 39 else 37
-                            else -> if (ny > 0) 40 else 38
-                        }
-
-                        if (newDir != activeKeyCode) {
-                            if (activeKeyCode != null) onDirectionChange(activeKeyCode, false)
-                            if (newDir != null) onDirectionChange(newDir, true)
-                            activeKeyCode = newDir
-                        }
+                        released.forEach { onKeyAction(it, false) }
+                        pressed.forEach { onKeyAction(it, true) }
+                        
+                        pressedDirections.clear()
+                        pressedDirections.addAll(newKeys)
                     }
-                )
-            },
-        contentAlignment = Alignment.Center
+                }
+            }
     ) {
-        Box(modifier = Modifier.size(size / 3).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)))
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(thumbOffset.x.roundToInt(), thumbOffset.y.roundToInt()) }
-                .size(thumbSize)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.8f))
-        )
+        // Visual D-Pad Cross
+        Box(Modifier.fillMaxSize()) {
+            // Background Circle
+            Box(Modifier.fillMaxSize().clip(CircleShape).background(Color.DarkGray.copy(alpha = 0.4f)))
+            
+            // Directional Indicators
+            DPadArrow(Alignment.TopCenter, Icons.Default.ArrowDropUp)
+            DPadArrow(Alignment.BottomCenter, Icons.Default.ArrowDropDown)
+            DPadArrow(Alignment.CenterStart, Icons.Default.ArrowLeft)
+            DPadArrow(Alignment.CenterEnd, Icons.Default.ArrowRight)
+        }
     }
 }
 
 @Composable
-fun ActionButtons(
+private fun BoxScope.DPadArrow(align: Alignment, icon: ImageVector) {
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = Color.White.copy(alpha = 0.8f),
+        modifier = Modifier.align(align).size(48.dp)
+    )
+}
+
+@Composable
+private fun ActionCluster(
     opacity: Float,
-    onButtonAction: (Int, Boolean) -> Unit
+    onKeyAction: (Int, Boolean) -> Unit
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            GameButton("Y", 9, opacity, onButtonAction) 
-            GameButton("X", 16, opacity, onButtonAction)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            GameButton("B", 27, opacity, onButtonAction, isPrimary = true)
-            GameButton("A", 13, opacity, onButtonAction, isPrimary = true)
+    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        // PC Action: SHIFT (Dash)
+        KeyboardButton("SHIFT", NexusInput.KEY_SHIFT, opacity, onKeyAction, size = 64.dp)
+        
+        Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            // PC Action: X (Cancel/Menu)
+            KeyboardButton("X", NexusInput.KEY_X, opacity, onKeyAction, isCancel = true)
+            // PC Action: Z (Confirm/OK)
+            KeyboardButton("Z", NexusInput.KEY_Z, opacity, onKeyAction, isPrimary = true)
         }
     }
 }
 
 @Composable
-fun GameButton(
+private fun KeyboardButton(
     label: String,
     keyCode: Int,
     opacity: Float,
     onAction: (Int, Boolean) -> Unit,
-    isPrimary: Boolean = false
+    size: androidx.compose.ui.unit.Dp = 72.dp,
+    isPrimary: Boolean = false,
+    isCancel: Boolean = false
 ) {
+    val color = when {
+        isPrimary -> MaterialTheme.colorScheme.primary
+        isCancel -> MaterialTheme.colorScheme.error
+        else -> Color.DarkGray
+    }
+
     Surface(
         modifier = Modifier
-            .size(64.dp)
+            .size(size)
             .alpha(opacity)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
-                        if (event.changes.any { it.pressed }) {
-                            onAction(keyCode, true)
-                        } else {
-                            onAction(keyCode, false)
-                        }
+                        val isPressed = event.changes.any { it.pressed }
+                        onAction(keyCode, isPressed)
                     }
                 }
             },
-        shape = CircleShape,
-        color = if (isPrimary) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f) 
-                else Color.DarkGray.copy(alpha = 0.6f),
-        contentColor = Color.White
+        shape = RoundedCornerShape(12.dp),
+        color = color.copy(alpha = 0.7f),
+        contentColor = Color.White,
+        tonalElevation = 4.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(label, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+            Text(label, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        }
+    }
+}
+
+@Composable
+private fun QuickActionsBar(
+    modifier: Modifier = Modifier,
+    onSettings: () -> Unit,
+    onExit: () -> Unit
+) {
+    Surface(
+        modifier = modifier,
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.5f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            IconButton(onClick = onSettings) { Icon(Icons.Default.Tune, "Settings", tint = Color.White) }
+            VerticalDivider(modifier = Modifier.height(20.dp), color = Color.White.copy(alpha = 0.3f))
+            IconButton(onClick = onExit) { Icon(Icons.AutoMirrored.Filled.ExitToApp, "Exit", tint = Color.Red) }
         }
     }
 }

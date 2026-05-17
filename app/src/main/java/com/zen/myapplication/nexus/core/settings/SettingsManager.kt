@@ -25,12 +25,11 @@ class SettingsManager(private val context: Context) {
         val ENABLE_WEBGL_2 = booleanPreferencesKey("enable_webgl_2")
         val USER_AGENT_SPOOF = stringPreferencesKey("user_agent_spoof")
         val FPS_LIMIT = intPreferencesKey("fps_limit")
+        val RENDERER_MODE = stringPreferencesKey("renderer_mode")
 
         // --- AI & Translation ---
         val TRANSLATION_ENABLED = booleanPreferencesKey("translation_enabled")
         val TARGET_LANGUAGE = stringPreferencesKey("target_language")
-        val TRANSLATION_SERVICE = stringPreferencesKey("translation_service")
-        val API_KEY = stringPreferencesKey("api_key")
     }
 
     // Default Values & Flows
@@ -40,6 +39,8 @@ class SettingsManager(private val context: Context) {
     
     val forceHardwareAccel: Flow<Boolean> = context.dataStore.data.map { it[FORCE_HARDWARE_ACCEL] ?: true }
     val fpsLimit: Flow<Int> = context.dataStore.data.map { it[FPS_LIMIT] ?: 60 }
+    val rendererMode: Flow<String> = context.dataStore.data.map { it[RENDERER_MODE] ?: "auto" }
+    
     val translationEnabled: Flow<Boolean> = context.dataStore.data.map { it[TRANSLATION_ENABLED] ?: true }
     val targetLanguage: Flow<String> = context.dataStore.data.map { it[TARGET_LANGUAGE] ?: "English" }
 
@@ -53,6 +54,10 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setShowFps(enabled: Boolean) {
         context.dataStore.edit { it[SHOW_FPS] = enabled }
+    }
+
+    suspend fun setRendererMode(mode: String) {
+        context.dataStore.edit { it[RENDERER_MODE] = mode }
     }
 
     suspend fun setTranslationEnabled(enabled: Boolean) {

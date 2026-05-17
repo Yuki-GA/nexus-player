@@ -1,118 +1,87 @@
 package com.zen.myapplication.nexus.core.input
 
 import android.view.KeyEvent
-import android.webkit.WebView
-
-/**
- * Abstract input model for Nexus Player.
- * Decouples physical keycodes and touch intents from the JS runtime.
- */
-enum class NexusInputIntent {
-    DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT,
-    ACTION_SOUTH, // Confirm / Z
-    ACTION_EAST,  // Cancel / X
-    ACTION_WEST,  // Shift / Run
-    ACTION_NORTH, // Menu / Esc
-    START,
-    SELECT,
-    L1, R1
-}
+import android.util.Log
 
 /**
  * NexusInput: The authoritative owner of the input pipeline.
- * Translates abstract intents into target-specific events.
+ * Emulates a professional PC Keyboard environment for RPG Maker.
  */
-class NexusInput(private val onIntent: (NexusInputIntent, Boolean) -> Unit) {
+class NexusInput(private val onInject: (Int, Boolean) -> Unit) {
 
-    // State tracking to prevent keydown spam and ensure clean keyup cycles
-    private val activeIntents = mutableSetOf<NexusInputIntent>()
+    private val activeKeys = mutableSetOf<Int>()
 
-    /**
-     * Dispatches an abstract input intent.
-     * Handles keydown/keyup lifecycle automatically.
-     */
-    fun dispatchIntent(intent: NexusInputIntent, isPressed: Boolean) {
+    companion object {
+        const val KEY_UP = 38
+        const val KEY_DOWN = 40
+        const val KEY_LEFT = 37
+        const val KEY_RIGHT = 39
+        const val KEY_Z = 90
+        const val KEY_X = 88
+        const val KEY_SHIFT = 16
+        const val KEY_ENTER = 13
+        const val KEY_ESCAPE = 27
+        const val KEY_Q = 81
+        const val KEY_W = 87
+    }
+
+    fun reset() {
+        Log.e("NEXUS_INPUT", "Resetting input state")
+        activeKeys.clear()
+    }
+
+    fun dispatchKey(keyCode: Int, isPressed: Boolean) {
+        val keyName = getKeyName(keyCode)
+        val action = if (isPressed) "DOWN" else "UP"
+        Log.e("NEXUS_INPUT", "$action: $keyName")
+        Log.e("NEXUS_INPUT", "dispatch -> $keyCode ($keyName)")
+
         if (isPressed) {
-            if (activeIntents.add(intent)) {
-                onIntent(intent, true)
+            if (activeKeys.add(keyCode)) {
+                onInject(keyCode, true)
             }
         } else {
-            if (activeIntents.remove(intent)) {
-                onIntent(intent, false)
+            if (activeKeys.remove(keyCode)) {
+                onInject(keyCode, false)
             }
         }
     }
 
-    /**
-     * Directly maps an Android physical KeyEvent.
-     */
+    private fun getKeyName(keyCode: Int): String = when (keyCode) {
+        KEY_UP -> "UP"
+        KEY_DOWN -> "DOWN"
+        KEY_LEFT -> "LEFT"
+        KEY_RIGHT -> "RIGHT"
+        KEY_Z -> "Z"
+        KEY_X -> "X"
+        KEY_SHIFT -> "SHIFT"
+        KEY_ENTER -> "ENTER"
+        KEY_ESCAPE -> "ESCAPE"
+        else -> "UNKNOWN ($keyCode)"
+    }
+
     fun handleKeyEvent(event: KeyEvent): Boolean {
-        val intent = mapAndroidKeyCode(event.keyCode) ?: return false
-        val isPressed = event.action == KeyEvent.ACTION_DOWN
-        dispatchIntent(intent, isPressed)
+        val pcKey = when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> KEY_UP
+            KeyEvent.KEYCODE_DPAD_DOWN -> KEY_DOWN
+            KeyEvent.KEYCODE_DPAD_LEFT -> KEY_LEFT
+            KeyEvent.KEYCODE_DPAD_RIGHT -> KEY_RIGHT
+            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> KEY_ENTER
+            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_BUTTON_B -> KEY_ESCAPE
+            KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_BUTTON_X -> KEY_SHIFT
+            KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_BUTTON_START -> KEY_ESCAPE
+            else -> return false
+        }
+        
+        dispatchKey(pcKey, event.action == KeyEvent.ACTION_DOWN)
         return true
     }
 
-    private fun mapAndroidKeyCode(keyCode: Int): NexusInputIntent? = when (keyCode) {
-        KeyEvent.KEYCODE_DPAD_UP -> NexusInputIntent.DPAD_UP
-        KeyEvent.KEYCODE_DPAD_DOWN -> NexusInputIntent.DPAD_DOWN
-        KeyEvent.KEYCODE_DPAD_LEFT -> NexusInputIntent.DPAD_LEFT
-        KeyEvent.KEYCODE_DPAD_RIGHT -> NexusInputIntent.DPAD_RIGHT
-        KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER -> NexusInputIntent.ACTION_SOUTH
-        KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> NexusInputIntent.ACTION_EAST
-        KeyEvent.KEYCODE_BUTTON_X -> NexusInputIntent.ACTION_WEST
-        KeyEvent.KEYCODE_BUTTON_Y -> NexusInputIntent.ACTION_NORTH
-        KeyEvent.KEYCODE_BUTTON_START -> NexusInputIntent.START
-        KeyEvent.KEYCODE_BUTTON_SELECT -> NexusInputIntent.SELECT
-        KeyEvent.KEYCODE_BUTTON_L1 -> NexusInputIntent.L1
-        KeyEvent.KEYCODE_BUTTON_R1 -> NexusInputIntent.R1
-        else -> null
-    }
-
     /**
-     * Utility to generate the JavaScript for injecting a KeyEvent into a WebView.
+     * Hardened Deep Bridge Injection:
+     * Calls the centralized __nexus.input handler which is synchronized with the engine loop.
      */
-    fun getWebInjectionScript(intent: NexusInputIntent, isPressed: Boolean): String {
-        val type = if (isPressed) "keydown" else "keyup"
-        val mapping = getWebMapping(intent)
-        return """
-            (function() {
-                const event = new KeyboardEvent('$type', {
-                    key: '${mapping.key}',
-                    code: '${mapping.code}',
-                    keyCode: ${mapping.keyCode},
-                    which: ${mapping.keyCode},
-                    bubbles: true,
-                    cancelable: true
-                });
-                window.dispatchEvent(event);
-                
-                // Compatibility for older RM plugins that use window.Input
-                if (window.Input && window.Input._onKeyDown && '$type' === 'keydown') {
-                    window.Input._onKeyDown(event);
-                }
-                if (window.Input && window.Input._onKeyUp && '$type' === 'keyup') {
-                    window.Input._onKeyUp(event);
-                }
-            })();
-        """.trimIndent()
-    }
-
-    private data class WebKey(val key: String, val code: String, val keyCode: Int)
-
-    private fun getWebMapping(intent: NexusInputIntent): WebKey = when (intent) {
-        NexusInputIntent.DPAD_UP -> WebKey("ArrowUp", "ArrowUp", 38)
-        NexusInputIntent.DPAD_DOWN -> WebKey("ArrowDown", "ArrowDown", 40)
-        NexusInputIntent.DPAD_LEFT -> WebKey("ArrowLeft", "ArrowLeft", 37)
-        NexusInputIntent.DPAD_RIGHT -> WebKey("ArrowRight", "ArrowRight", 39)
-        NexusInputIntent.ACTION_SOUTH -> WebKey("z", "KeyZ", 90) // Confirm
-        NexusInputIntent.ACTION_EAST -> WebKey("x", "KeyX", 88)  // Cancel
-        NexusInputIntent.ACTION_WEST -> WebKey("Shift", "ShiftLeft", 16) // Run
-        NexusInputIntent.ACTION_NORTH -> WebKey("Escape", "Escape", 27) // Menu
-        NexusInputIntent.START -> WebKey("Enter", "Enter", 13)
-        NexusInputIntent.SELECT -> WebKey("Tab", "Tab", 9)
-        NexusInputIntent.L1 -> WebKey("q", "KeyQ", 81)
-        NexusInputIntent.R1 -> WebKey("w", "KeyW", 87)
+    fun getWebInjectionScript(keyCode: Int, isPressed: Boolean): String {
+        return "if(window.__nexus && __nexus.input) __nexus.input.dispatch($keyCode, $isPressed);"
     }
 }
-

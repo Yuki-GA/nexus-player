@@ -9,6 +9,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import android.net.Uri
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.util.Log
 
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
@@ -30,6 +31,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
+import android.app.Activity
+import android.content.pm.ActivityInfo
 
 /**
  * OverlayHost: The root UI component for the Nexus Player.
@@ -40,44 +43,71 @@ fun OverlayHost(
     rootUri: Uri,
     engineType: SafManager.GameEngine,
     runtimeController: RuntimeController,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onExit: () -> Unit = {}
 ) {
     val state by runtimeController.state.collectAsState()
     var retryKey by remember { mutableIntStateOf(0) }
     var showSettings by remember { mutableStateOf(false) }
-    
+
     val context = LocalContext.current
     val settingsManager = remember { SettingsManager(context) }
     val overlayOpacity by settingsManager.controllerOpacity.collectAsState(initial = 0.6f)
     
-    // Calculate safe areas for virtual controls
     val safeInsets = WindowInsets.systemBars
         .union(WindowInsets.displayCutout)
         .asPaddingValues()
 
-    // Ensure the engine is stopped when this screen is exited
-    DisposableEffect(rootUri) {
-        onDispose {
-            runtimeController.stopGame()
+    // Dynamic Orientation Handler
+    // Only changes orientation when state moves to Running
+    LaunchedEffect(state) {
+        val activity = context as? Activity
+        if (state is RuntimeState.Running) {
+            Log.e("NEXUS_UI", "FORCING LANDSCAPE for Gameplay")
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            
+            // Immersive Fullscreen Mode for Gameplay
+            val windowInsetsController = androidx.core.view.WindowCompat.getInsetsController(activity!!.window, activity.window.decorView)
+            windowInsetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            windowInsetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         }
     }
 
-    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+    // Lifecycle Cleanup & Orientation Reset
+    // Removed stopGame() from onDispose to survive orientation changes
+    DisposableEffect(rootUri) {
+        onDispose {
+            Log.e("NEXUS", "Detached without destroy")
+            Log.e("NEXUS_UI", "Cleaning up OverlayHost (survives rotation if Activity persists)")
+            // Restore portrait and system bars when leaving the game screen
+            val activity = context as? Activity
+            activity?.let {
+                it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                val windowInsetsController = androidx.core.view.WindowCompat.getInsetsController(it.window, it.window.decorView)
+                windowInsetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
+
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)) { 
         val currentState = state
         
         // --- Runtime Layer ---
         key(retryKey) {
             when {
-                currentState is RuntimeState.Running && currentState.isNative -> {
-                    NativeSurfaceLayer(runtimeController)
+                engineType.requiresNativeRuntime -> {
+                    if (currentState is RuntimeState.Running && currentState.isNative) {
+                        NativeSurfaceLayer(runtimeController)
+                    }
                 }
-                currentState !is RuntimeState.Error && currentState !is RuntimeState.Idle -> {
+                else -> {
                     Html5RuntimeLayer(rootUri, runtimeController)
                 }
             }
         }
         
-        // --- Overlay Layer (UI / Boot / Error) ---
+        // --- Overlay Layer ---
         when (val s = currentState) {
             is RuntimeState.Booting -> {
                 BootSequenceOverlay(s)
@@ -89,14 +119,24 @@ fun OverlayHost(
                         runtimeController.stopGame()
                         retryKey++ 
                     },
-                    onExit = { runtimeController.stopGame() }
+                    onExit = { 
+                        runtimeController.stopGame() 
+                        (context as? Activity)?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        onExit()
+                    }
                 )
             }
             is RuntimeState.Running -> {
+                Log.e("NEXUS_INPUT", "Overlay active")
                 NexusOverlay(
                     runtimeController = runtimeController,
                     opacity = overlayOpacity,
-                    onOpenSettings = { showSettings = true }
+                    onOpenSettings = { showSettings = true },
+                    onExit = {
+                        runtimeController.stopGame()
+                        (context as? Activity)?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        onExit()
+                    }
                 )
             }
             else -> {
@@ -108,12 +148,10 @@ fun OverlayHost(
             }
         }
 
-        // --- Settings Layer ---
         if (showSettings) {
             NexusSettingsScreen(onClose = { showSettings = false })
         }
 
-        // --- Diagnostics Layer (Debug only) ---
         if (currentState is RuntimeState.Running && BuildConfig.DEBUG) {
             Box(modifier = Modifier.align(Alignment.TopEnd).padding(safeInsets)) {
                 RuntimeDiagnosticsOverlay()
@@ -127,18 +165,26 @@ fun OverlayHost(
 private fun Html5RuntimeLayer(rootUri: Uri, runtimeController: RuntimeController) {
     AndroidView(
         factory = { context ->
-            WebView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                runtimeController.startHtml5Game(this, rootUri)
+            val webView = runtimeController.getOrCreateWebView(context)
+            if (webView.parent != null) {
+                Log.e("NEXUS", "Existing WebView attached")
+                (webView.parent as ViewGroup).removeView(webView)
             }
+            webView.layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            try {
+                runtimeController.startHtml5Game(context, rootUri)
+            } catch (t: Throwable) {
+                Log.e("NEXUS_FATAL", "Exception in startHtml5Game", t)
+            }
+            webView
         },
         modifier = Modifier.fillMaxSize(),
         update = { },
         onRelease = { webView ->
-            webView.destroy()
+            // DO NOT destroy here if we want to survive rotation without recreation
         }
     )
 }

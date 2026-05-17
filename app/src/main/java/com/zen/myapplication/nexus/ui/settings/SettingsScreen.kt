@@ -1,5 +1,9 @@
 package com.zen.myapplication.nexus.ui.settings
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,6 +14,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -19,138 +25,182 @@ import com.zen.myapplication.nexus.core.settings.SettingsManager
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/**
- * SettingsScreen: Handheld-optimized settings interface.
- * High-density card-based design with Android 15+ WindowInsets support.
- */
-@OptIn(ExperimentalMaterial3Api::class)
+val NeonBlue = Color(0xFF00E5FF)
+val GlassWhite = Color(0x1AFFFFFF)
+
+enum class SettingsCategory(val title: String, val icon: ImageVector) {
+    Appearance("Appearance", Icons.Default.Palette),
+    Layout("Layout", Icons.Default.Dashboard),
+    Runtime("Runtime", Icons.Default.Speed),
+    Input("Input", Icons.Default.Gamepad),
+    Library("Library", Icons.Default.LibraryBooks),
+    System("System", Icons.Default.Memory)
+}
+
 @Composable
 fun SettingsScreen() {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val settingsManager = remember { SettingsManager(context) }
+    var selectedCategory by remember { mutableStateOf(SettingsCategory.Appearance) }
 
-    val opacity by settingsManager.controllerOpacity.collectAsState(initial = 0.6f)
-    val controllerSize by settingsManager.controllerSize.collectAsState(initial = 1.0f)
-    val showFps by settingsManager.showFps.collectAsState(initial = false)
-    val hardwareAccel by settingsManager.forceHardwareAccel.collectAsState(initial = true)
-    val fpsLimit by settingsManager.fpsLimit.collectAsState(initial = 60)
+    Row(modifier = Modifier.fillMaxSize()) {
+        // Categories Sidebar
+        Column(
+            modifier = Modifier
+                .width(200.dp)
+                .fillMaxHeight()
+                .padding(end = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SettingsCategory.values().forEach { category ->
+                val isSelected = selectedCategory == category
+                val bgColor = if (isSelected) NeonBlue.copy(alpha = 0.2f) else Color.Transparent
+                val fgColor = if (isSelected) NeonBlue else Color.Gray
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing) // Android 15+ Notch/Gesture safety
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Header
-        Column(modifier = Modifier.padding(bottom = 8.dp)) {
-            Text(
-                text = "Runtime Settings",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Optimize your handheld experience.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        // Section: Interface & Overlays
-        SettingsCard(title = "Interface & Overlays", icon = Icons.Default.Layers) {
-            SettingsSlider(
-                label = "Overlay Opacity",
-                value = opacity,
-                valueText = "${(opacity * 100).roundToInt()}%",
-                valueRange = 0.2f..1.0f,
-                onValueChange = { scope.launch { settingsManager.setControllerOpacity(it) } }
-            )
-            SettingsSlider(
-                label = "Button Size",
-                value = controllerSize,
-                valueText = "${(controllerSize * 100).roundToInt()}%",
-                valueRange = 0.75f..1.35f,
-                onValueChange = { scope.launch { settingsManager.setControllerSize(it) } }
-            )
-            SettingsToggle(
-                label = "Show Performance Overlay",
-                checked = showFps,
-                onCheckedChange = { scope.launch { settingsManager.setShowFps(it) } }
-            )
-        }
-
-        // Section: Engine & Performance
-        SettingsCard(title = "Engine & Performance", icon = Icons.Default.Speed) {
-            SettingsToggle(
-                label = "Hardware Acceleration",
-                checked = hardwareAccel,
-                onCheckedChange = { scope.launch { settingsManager.setForceHardwareAccel(it) } }
-            )
-            SettingsSlider(
-                label = "FPS Target",
-                value = fpsLimit.toFloat(),
-                valueText = "$fpsLimit FPS",
-                valueRange = 30f..120f,
-                steps = 2,
-                onValueChange = { value ->
-                    val snapped = when {
-                        value < 45f -> 30
-                        value < 90f -> 60
-                        else -> 120
-                    }
-                    scope.launch { settingsManager.setFpsLimit(snapped) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(bgColor)
+                        .clickable { selectedCategory = category }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(category.icon, contentDescription = null, tint = fgColor, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text(category.title, color = fgColor, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
                 }
-            )
+            }
         }
 
-        // Placeholder for future engine-specific settings (UX Completeness)
-        SettingsCard(title = "Engine Compatibility", icon = Icons.Default.Extension) {
-            Text(
-                "Advanced compatibility shims for MV/MZ plugins and NW.js behavior are managed automatically per-game.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-        }
+        // Settings Content
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.White.copy(alpha = 0.05f))
+                .padding(24.dp)
+        ) {
+            AnimatedContent(
+                targetState = selectedCategory,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "SettingsCategory"
+            ) { category ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    Text(category.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
 
-        Spacer(modifier = Modifier.height(24.dp))
+                    when (category) {
+                        SettingsCategory.Appearance -> AppearanceSettings()
+                        SettingsCategory.Layout -> LayoutSettings()
+                        SettingsCategory.Runtime -> RuntimeSettings()
+                        SettingsCategory.Input -> InputSettings()
+                        SettingsCategory.Library -> LibrarySettings()
+                        SettingsCategory.System -> SystemSettings()
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun SettingsCard(
-    title: String,
-    icon: ImageVector,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 12.dp)
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+private fun AppearanceSettings() {
+    SettingsSection("Theme & Styling") {
+        SettingsToggle("AMOLED Dark Mode", true) {}
+        SettingsToggle("Glassmorphism Effects", true) {}
+        SettingsSlider("UI Blur Intensity", 0.5f, "50%", 0f..1f) {}
+        SettingsSlider("Corner Radius", 16f, "16dp", 0f..32f) {}
+    }
+}
+
+@Composable
+private fun LayoutSettings() {
+    SettingsSection("Dashboard Layout") {
+        SettingsToggle("Compact Sidebar Mode", false) {}
+        SettingsToggle("Show Telemetry Panel", true) {}
+        SettingsSlider("Card Spacing", 16f, "16dp", 8f..32f) {}
+    }
+}
+
+@Composable
+private fun RuntimeSettings() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val settingsManager = remember { SettingsManager(context) }
+    val hardwareAccel by settingsManager.forceHardwareAccel.collectAsState(initial = true)
+    val fpsLimit by settingsManager.fpsLimit.collectAsState(initial = 60)
+
+    SettingsSection("Engine & Performance") {
+        SettingsToggle("Hardware Acceleration", hardwareAccel) { scope.launch { settingsManager.setForceHardwareAccel(it) } }
+        SettingsToggle("Force WebGL Mode", true) {}
+        SettingsToggle("Lifecycle Stabilization Mode", true) {}
+        SettingsSlider(
+            label = "FPS Limit",
+            value = fpsLimit.toFloat(),
+            valueText = "$fpsLimit FPS",
+            valueRange = 30f..120f,
+            steps = 2
+        ) { value ->
+            val snapped = when { value < 45f -> 30; value < 90f -> 60; else -> 120 }
+            scope.launch { settingsManager.setFpsLimit(snapped) }
+        }
+    }
+}
+
+@Composable
+private fun InputSettings() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val settingsManager = remember { SettingsManager(context) }
+    val opacity by settingsManager.controllerOpacity.collectAsState(initial = 0.6f)
+    val size by settingsManager.controllerSize.collectAsState(initial = 1.0f)
+
+    SettingsSection("Virtual Controls") {
+        SettingsSlider("Overlay Opacity", opacity, "${(opacity * 100).roundToInt()}%", 0.2f..1.0f) { scope.launch { settingsManager.setControllerOpacity(it) } }
+        SettingsSlider("Button Scale", size, "${(size * 100).roundToInt()}%", 0.5f..1.5f) { scope.launch { settingsManager.setControllerSize(it) } }
+        SettingsToggle("Haptic Feedback", true) {}
+    }
+}
+
+@Composable
+private fun LibrarySettings() {
+    SettingsSection("Library Preferences") {
+        SettingsToggle("Show Hidden Games", false) {}
+        SettingsToggle("Fetch Custom Artwork", true) {}
+        SettingsSlider("Grid Items Per Row", 3f, "3", 2f..6f) {}
+    }
+}
+
+@Composable
+private fun SystemSettings() {
+    SettingsSection("System & Maintenance") {
+        SettingsToggle("Enable Verbose Telemetry", false) {}
+        Button(onClick = {}, colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f))) {
+            Text("Clear VFS Cache", color = Color.White)
+        }
+        Button(onClick = {}, colors = ButtonDefaults.buttonColors(containerColor = GlassWhite)) {
+            Text("Export Diagnostic Logs", color = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(title, color = NeonBlue, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.Black.copy(alpha = 0.2f))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             content()
         }
     }
@@ -159,17 +209,12 @@ private fun SettingsCard(
 @Composable
 private fun SettingsToggle(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Text(label, color = Color.White, fontSize = 14.sp)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedThumbColor = NeonBlue, checkedTrackColor = NeonBlue.copy(alpha = 0.3f)))
     }
 }
 
@@ -182,31 +227,21 @@ private fun SettingsSlider(
     steps: Int = 0,
     onValueChange: (Float) -> Unit
 ) {
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+    Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            ) {
-                Text(
-                    text = valueText,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
+            Text(label, color = Color.White, fontSize = 14.sp)
+            Text(valueText, color = NeonBlue, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
         Slider(
             value = value,
             valueRange = valueRange,
             steps = steps,
             onValueChange = onValueChange,
-            modifier = Modifier.padding(top = 4.dp)
+            colors = SliderDefaults.colors(thumbColor = NeonBlue, activeTrackColor = NeonBlue)
         )
     }
 }
