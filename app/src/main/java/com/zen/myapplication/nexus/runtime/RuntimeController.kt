@@ -16,6 +16,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.webkit.WebViewAssetLoader
+import com.zen.myapplication.BuildConfig
 import com.zen.myapplication.nexus.core.bridge.NexusBridge
 import com.zen.myapplication.nexus.core.engine.EngineResolver
 import com.zen.myapplication.nexus.core.engine.NativeEngineBridge
@@ -81,6 +82,10 @@ class RuntimeController(application: Application) : AndroidViewModel(application
     fun startHtml5Game(webView: WebView, rootUri: Uri) {
         if (_state.value !is RuntimeState.Idle) return
         
+        if (BuildConfig.DEBUG) {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
+
         _state.value = RuntimeState.Booting.Initializing
         this.webViewInstance = webView
         val gameId = rootUri.toString()
