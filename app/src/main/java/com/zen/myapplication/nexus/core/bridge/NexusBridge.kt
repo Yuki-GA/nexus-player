@@ -16,7 +16,9 @@ class NexusBridge(
     private val webView: WebView,
     private val vfs: NexusVFS,
     private val gameId: String,
-    private val vfsCache: Map<String, Uri>
+    private val vfsCache: Map<String, Uri>,
+    private val onTelemetry: (String, String) -> Unit = { _, _ -> },
+    private val onFpsUpdate: (Int) -> Unit = {}
 ) {
     companion object {
         private const val TAG = "NexusBridge"
@@ -92,6 +94,7 @@ class NexusBridge(
     @JavascriptInterface
     fun reportCrash(msg: String) {
         Log.e(TAG, "Game Crash Intercepted: $msg")
+        onTelemetry("CRASH", msg)
     }
 
     @JavascriptInterface
@@ -122,6 +125,16 @@ class NexusBridge(
     @JavascriptInterface
     fun exitGame() {
         webView.post { (webView.context as? android.app.Activity)?.finish() }
+    }
+
+    @JavascriptInterface
+    fun reportTelemetry(tag: String, message: String) {
+        onTelemetry(tag, message)
+    }
+
+    @JavascriptInterface
+    fun updateFps(fps: Int) {
+        onFpsUpdate(fps)
     }
 
     // Legacy support

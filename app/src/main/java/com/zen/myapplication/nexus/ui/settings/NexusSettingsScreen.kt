@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * NexusSettingsScreen: Comprehensive multi-tab settings inspired by Ludens.
+ * NexusSettingsScreen: Simplified quick-settings overlay for in-game use.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,24 +32,22 @@ fun NexusSettingsScreen(
     val settingsManager = remember { SettingsManager(context) }
     
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Engine", "Controls", "Game", "Display")
+    val tabs = listOf("Engine", "Controls")
 
     ModalBottomSheet(
         onDismissRequest = onClose,
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(modifier = Modifier.fillMaxHeight(0.85f)) {
-            // Header
+        Column(modifier = Modifier.fillMaxHeight(0.6f).padding(horizontal = 16.dp)) {
             Text(
-                text = "Nexus Runtime Configuration",
+                text = "Quick Configuration",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(vertical = 16.dp)
             )
 
-            // Tabs
-            TabRow(selectedTabIndex = selectedTab) {
+            PrimaryTabRow(selectedTabIndex = selectedTab) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTab == index,
@@ -59,13 +57,10 @@ fun NexusSettingsScreen(
                 }
             }
 
-            // Tab Content
-            Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+            Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 24.dp)) {
                 when (selectedTab) {
-                    0 -> EngineTab(settingsManager)
-                    1 -> ControlsTab(settingsManager)
-                    2 -> GameTab()
-                    3 -> DisplayTab()
+                    0 -> QuickEngineTab(settingsManager)
+                    1 -> QuickControlsTab(settingsManager)
                 }
             }
         }
@@ -73,119 +68,41 @@ fun NexusSettingsScreen(
 }
 
 @Composable
-private fun EngineTab(settingsManager: SettingsManager) {
+private fun QuickEngineTab(settingsManager: SettingsManager) {
     val scope = rememberCoroutineScope()
     val hardwareAccel by settingsManager.forceHardwareAccel.collectAsState(initial = true)
-    val showFps by settingsManager.showFps.collectAsState(initial = false)
-    
-    var resolutionScale by remember { mutableFloatStateOf(1.0f) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         SettingsToggle(
             label = "Hardware Acceleration",
-            description = "Force GPU rasterization (highly recommended).",
+            description = "Toggle GPU compositing.",
             checked = hardwareAccel,
             onCheckedChange = { scope.launch { settingsManager.setForceHardwareAccel(it) } }
         )
-        SettingsToggle(
-            label = "Show FPS Counter",
-            description = "Overlay engine performance metrics.",
-            checked = showFps,
-            onCheckedChange = { scope.launch { settingsManager.setShowFps(it) } }
-        )
-        
-        Column {
-            Text("Resolution Scale", style = MaterialTheme.typography.bodyLarge)
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0.5f, 0.75f, 1.0f, 1.5f).forEach { scale ->
-                    FilterChip(
-                        selected = resolutionScale == scale,
-                        onClick = { resolutionScale = scale },
-                        label = { Text("${scale}x") }
-                    )
-                }
-            }
-        }
     }
 }
 
 @Composable
-private fun ControlsTab(settingsManager: SettingsManager) {
+private fun QuickControlsTab(settingsManager: SettingsManager) {
     val scope = rememberCoroutineScope()
     val opacity by settingsManager.controllerOpacity.collectAsState(initial = 0.6f)
     val size by settingsManager.controllerSize.collectAsState(initial = 1.0f)
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         SettingsSlider(
-            label = "Control Opacity",
+            label = "Overlay Opacity",
             value = opacity,
             valueText = "${(opacity * 100).roundToInt()}%",
-            valueRange = 0.2f..1.0f,
+            valueRange = 0.1f..1.0f,
             onValueChange = { scope.launch { settingsManager.setControllerOpacity(it) } }
         )
         SettingsSlider(
-            label = "Control Size",
+            label = "Button Scale",
             value = size,
             valueText = "${(size * 100).roundToInt()}%",
-            valueRange = 0.75f..1.35f,
+            valueRange = 0.5f..1.5f,
             onValueChange = { scope.launch { settingsManager.setControllerSize(it) } }
         )
-        
-        OutlinedButton(
-            onClick = { /* Drag repositioning */ },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.DragIndicator, null)
-            Spacer(Modifier.width(8.dp))
-            Text("Edit Control Positions")
-        }
-    }
-}
-
-@Composable
-private fun GameTab() {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            InfoRow("Engine", "RPG Maker MZ")
-            InfoRow("Entry Point", "index.html")
-            InfoRow("Translation", "Active (1,240 strings)")
-            InfoRow("Decryption", "Enabled (XOR 16-byte)")
-        }
-    }
-}
-
-@Composable
-private fun DisplayTab() {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Theme", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("System", "Dark", "Light").forEach { theme ->
-                FilterChip(selected = theme == "Dark", onClick = {}, label = { Text(theme) })
-            }
-        }
-        
-        Text("Language", style = MaterialTheme.typography.titleMedium)
-        listOf("English", "Bahasa Indonesia", "日本語").forEach { lang ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(selected = lang == "English", onClick = {})
-                Spacer(Modifier.width(8.dp))
-                Text(lang)
-            }
-        }
-    }
-}
-
-@Composable
-private fun InfoRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontWeight = FontWeight.Bold)
     }
 }
 

@@ -47,6 +47,23 @@ class RuntimeController(application: Application) : AndroidViewModel(application
     private val _state = MutableStateFlow<RuntimeState>(RuntimeState.Idle)
     val state: StateFlow<RuntimeState> = _state
 
+    private val _telemetryLogs = MutableStateFlow<List<String>>(emptyList())
+    val telemetryLogs: StateFlow<List<String>> = _telemetryLogs
+
+    private val _isVfsMounted = MutableStateFlow(false)
+    val isVfsMounted: StateFlow<Boolean> = _isVfsMounted
+
+    private val _fps = MutableStateFlow(0)
+    val fps: StateFlow<Int> = _fps
+
+    private fun addTelemetryLog(msg: String) {
+        val current = _telemetryLogs.value.toMutableList()
+        current.add(msg)
+        if (current.size > 50) current.removeAt(0)
+        _telemetryLogs.value = current
+        Log.e("NEXUS_TELEMETRY", msg)
+    }
+
     private val vfs = NexusVFS(context)
     private val engineResolver = EngineResolver(context)
     private val nativeBridge = NativeEngineBridge()
@@ -82,14 +99,28 @@ class RuntimeController(application: Application) : AndroidViewModel(application
 
     private fun updateState(newState: RuntimeState, sessionId: String? = null) {
         if (sessionId != null && sessionId != activeSessionId) {
-            Log.w("NEXUS_SESSION", "STALE STATE TRANSITION BLOCKED: Session $sessionId is dead.")
+            addTelemetryLog("STALE STATE TRANSITION BLOCKED: Session $sessionId is dead.")
             return
         }
         val oldState = _state.value
         if (oldState != newState) {
-            Log.e("NEXUS_STATE", "TRANSITION: ${oldState::class.java.simpleName} -> ${newState::class.java.simpleName}")
+            addTelemetryLog("STATE TRANSITION: ${oldState::class.java.simpleName} -> ${newState::class.java.simpleName}")
             _state.value = newState
         }
+    }
+
+    fun reportTelemetry(tag: String, msg: String) {
+        addTelemetryLog("[$tag] $msg")
+    }
+
+    fun updateFps(fps: Int) {
+        _fps.value = fps
+    }
+
+    fun getMemoryUsage(): String {
+        val runtime = Runtime.getRuntime()
+        val usedMem = (runtime.totalMemory() - runtime.freeMemory()) / 1024 / 1024
+        return "${usedMem}MB"
     }
 
     fun getOrCreateWebView(activityContext: Context): WebView {
@@ -183,7 +214,11 @@ class RuntimeController(application: Application) : AndroidViewModel(application
         }
 
         requestGameAudioFocus()
-        webBridge = NexusBridge(webView, vfs, gameId, vfsCache)
+        webBridge = NexusBridge(
+            webView, vfs, gameId, vfsCache,
+            onTelemetry = { tag, msg -> addTelemetryLog("[$tag] $msg") },
+            onFpsUpdate = { fps -> _fps.value = fps }
+        )
 
         Log.e("NEXUS_INPUT", "Initializing input bridge")
         input = NexusInput { keyCode, isPressed ->
@@ -211,11 +246,8 @@ class RuntimeController(application: Application) : AndroidViewModel(application
                 withContext(Dispatchers.IO) {
                     vfs.indexDirectory(gameId, rootUri, vfsCache)
                 }
-                
-                if (activeSessionId != sessionId) {
-                    Log.w("NEXUS_SESSION", "S[$sessionId] STALE SESSION ABORTED during VFS mount.")
-                    return@launch
-                }
+                _isVfsMounted.value = true
+                addTelemetryLog("VFS MOUNTED: ${vfsCache.size} files indexed")
 
                 Log.e("NEXUS_BOOT", "S[$sessionId] STEP 2 COMPLETE: VFS Mounted in ${System.currentTimeMillis() - mountStart}ms")
 

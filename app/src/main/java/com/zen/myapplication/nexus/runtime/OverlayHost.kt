@@ -130,7 +130,6 @@ fun OverlayHost(
                 Log.e("NEXUS_INPUT", "Overlay active")
                 NexusOverlay(
                     runtimeController = runtimeController,
-                    opacity = overlayOpacity,
                     onOpenSettings = { showSettings = true },
                     onExit = {
                         runtimeController.stopGame()

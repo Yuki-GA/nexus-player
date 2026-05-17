@@ -192,6 +192,21 @@ class NexusVFS(private val context: Context) {
                         return {};
                     };
 
+                    // --- REAL-TIME TELEMETRY BRIDGE ---
+                    let _lastFrameTime = performance.now();
+                    let _frameCount = 0;
+                    function updateFps() {
+                        _frameCount++;
+                        const now = performance.now();
+                        if (now - _lastFrameTime >= 1000) {
+                            if (window.NexusNative) NexusNative.updateFps(_frameCount);
+                            _frameCount = 0;
+                            _lastFrameTime = now;
+                        }
+                        requestAnimationFrame(updateFps);
+                    }
+                    updateFps();
+
                     window.WebAudio = window.WebAudio || {};
                     WebAudio._canPlayOgg = function() { return false; }; 
 
